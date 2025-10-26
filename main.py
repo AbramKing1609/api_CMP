@@ -2,50 +2,40 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 import requests
 from bs4 import BeautifulSoup
-import urllib3
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-app = FastAPI(title="API CMP Perú", version="1.3")
+app = FastAPI(title="API CMP Perú", version="2.0")
 
 def obtener_datos_cmp(cmp_number: str):
-    base_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/"
-    data_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0 Safari/537.36",
-        "Referer": base_url,
-    }
-
     try:
-        # Crear sesión para mantener cookies
-        session = requests.Session()
-        session.get(base_url, headers=headers, timeout=10, verify=False)
+        url = f"https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php?cmp={cmp_number}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
 
-        # Simular el formulario (método POST)
-        r = session.post(data_url, headers=headers, data={"cmp": cmp_number}, timeout=10, verify=False)
-        r.raise_for_status()
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
 
-        soup = BeautifulSoup(r.text, "html.parser")
-        rows = soup.select("table tr")
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        if len(rows) >= 2:
-            celdas = rows[1].find_all("td")
-            if len(celdas) >= 5:
-                return {
-                    "CMP": celdas[1].get_text(strip=True),
-                    "Apellido_Paterno": celdas[2].get_text(strip=True),
-                    "Apellido_Materno": celdas[3].get_text(strip=True),
-                    "Nombres": celdas[4].get_text(strip=True),
-                    "Nombre_Completo": f"{celdas[4].get_text(strip=True)} "
-                                       f"{celdas[2].get_text(strip=True)} "
-                                       f"{celdas[3].get_text(strip=True)}"
-                }
+        # Busca la tabla con clase cabecera_tr2
+        row = soup.find("tr", {"class": "cabecera_tr2"})
+        if not row:
+            return {"error": "No se encontraron resultados para ese CMP."}
 
-        return {"error": "No se encontraron resultados para ese CMP."}
+        cells = [td.get_text(strip=True) for td in row.find_all("td")]
+        if len(cells) < 5:
+            return {"error": "No se encontraron suficientes datos."}
+
+        datos = {
+            "CMP": cells[1],
+            "Apellido_Paterno": cells[2],
+            "Apellido_Materno": cells[3],
+            "Nombres": cells[4]
+        }
+
+        return datos
 
     except Exception as e:
-        return {"error": f"Error: {str(e)}"}
+        return {"error": str(e)}
 
 @app.get("/consulta")
 def consulta_cmp(cmp: str = Query(..., description="Número CMP del médico")):
