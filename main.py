@@ -3,27 +3,30 @@ from fastapi.responses import JSONResponse
 import requests
 from bs4 import BeautifulSoup
 
-app = FastAPI(title="API CMP Perú", version="1.6")
+app = FastAPI(title="API CMP Perú", version="1.7")
 
-# ✅ Tu API key de ScrapingBee
 SCRAPINGBEE_KEY = "JZ1LZ47IK8QDHR09YOOWURL26ZL8ORVQ5SU4ISKG8H6G4EGVA82JSR0XB02KVVD5VIL3VO5P26XQLNXF"
 
 def obtener_datos_cmp(cmp_number: str):
-    """
-    Consulta los datos del médico en el portal del CMP usando ScrapingBee.
-    """
-    data_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php"
-
     try:
-        payload = {"cmp": cmp_number}
-        params = {
-            "api_key": SCRAPINGBEE_KEY,
-            "url": data_url,
-            "render_js": "false"  # no hace falta ejecutar JS
-        }
+        session = requests.Session()
 
-        # 🚀 Usamos POST real con proxy ScrapingBee
-        r = requests.post("https://app.scrapingbee.com/api/v1/", params=params, data=payload, timeout=20)
+        # Paso 1️⃣: visitar la página principal para obtener cookies
+        base_params = {
+            "api_key": SCRAPINGBEE_KEY,
+            "url": "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/",
+            "render_js": "false"
+        }
+        session.get("https://app.scrapingbee.com/api/v1/", params=base_params, timeout=20)
+
+        # Paso 2️⃣: hacer POST con el CMP
+        post_params = {
+            "api_key": SCRAPINGBEE_KEY,
+            "url": "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php",
+            "render_js": "false"
+        }
+        payload = {"cmp": cmp_number}
+        r = session.post("https://app.scrapingbee.com/api/v1/", params=post_params, data=payload, timeout=20)
         r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "html.parser")
@@ -49,8 +52,5 @@ def obtener_datos_cmp(cmp_number: str):
 
 @app.get("/consulta")
 def consulta_cmp(cmp: str = Query(..., description="Número CMP del médico")):
-    """
-    Endpoint principal de consulta CMP.
-    """
     datos = obtener_datos_cmp(cmp)
     return JSONResponse(content=datos)
