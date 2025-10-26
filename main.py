@@ -2,40 +2,66 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 import requests
 from bs4 import BeautifulSoup
+import urllib3
 
-app = FastAPI(title="API CMP Perú", version="2.0")
+# Desactiva solo el warning de certificados (Railway a veces da error SSL)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+app = FastAPI(title="API CMP Perú", version="1.4")
 
 def obtener_datos_cmp(cmp_number: str):
+    base_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/"
+    data_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0 Safari/537.36",
+        "Referer": base_url,
+    }
+
     try:
-        url = f"https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php?cmp={cmp_number}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=15, verify=False)
+        # Crear sesión para mantener cookies y encabezados
+        session = requests.Session()
+        session.get(base_url, headers=headers, timeout=10, verify=False)
 
-        if response.status_code != 200:
-            return {"error": f"HTTP {response.status_code}"}
+        # Simular envío de formulario POST
+        r = session.post(
+            data_url,
+            headers=headers,
+            data={"cmp": cmp_number},
+            timeout=10,
+            verify=False
+        )
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        if r.status_code != 200:
+            return {"error": f"Error HTTP {r.status_code} al acceder al servidor."}
 
-        # Busca la tabla con clase cabecera_tr2
-        row = soup.find("tr", {"class": "cabecera_tr2"})
-        if not row:
-            return {"error": "No se encontraron resultados para ese CMP."}
+        soup = BeautifulSoup(r.text, "html.parser")
+        rows = soup.select("table tr")
 
-        cells = [td.get_text(strip=True) for td in row.find_all("td")]
-        if len(cells) < 5:
-            return {"error": "No se encontraron suficientes datos."}
+        if len(rows) >= 2:
+            celdas = rows[1].find_all("td")
+            if len(celdas) >= 5:
+                cmp = celdas[1].get_text(strip=True)
+                ap_paterno = celdas[2].get_text(strip=True)
+                ap_materno = celdas[3].get_text(strip=True)
+                nombres = celdas[4].get_text(strip=True)
 
-        datos = {
-            "CMP": cells[1],
-            "Apellido_Paterno": cells[2],
-            "Apellido_Materno": cells[3],
-            "Nombres": cells[4]
-        }
+                return {
+                    "CMP": cmp,
+                    "Apellido_Paterno": ap_paterno,
+                    "Apellido_Materno": ap_materno,
+                    "Nombres": nombres,
+                    "Nombre_Completo": f"{nombres} {ap_paterno} {ap_materno}"
+                }
 
-        return datos
+        return {"error": "No se encontraron resultados para ese CMP."}
 
+    except requests.exceptions.SSLError:
+        return {"error": "Error SSL: el servidor no pudo verificar el certificado."}
+    except requests.exceptions.ConnectionError:
+        return {"error": "Error de conexión con el sitio CMP."}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Error inesperado: {str(e)}"}
 
 @app.get("/consulta")
 def consulta_cmp(cmp: str = Query(..., description="Número CMP del médico")):
