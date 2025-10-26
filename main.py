@@ -2,13 +2,13 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 import requests
 from bs4 import BeautifulSoup
+import urllib3
 
-app = FastAPI(title="API CMP Perú", version="1.1")
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+app = FastAPI(title="API CMP Perú", version="1.2")
 
 def obtener_datos_cmp(cmp_number: str):
-    """
-    Realiza la consulta al sitio del CMP directamente sin usar Selenium.
-    """
     url = f"https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php?cmp={cmp_number}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -19,7 +19,13 @@ def obtener_datos_cmp(cmp_number: str):
     }
 
     try:
-        r = requests.get(url, headers=headers, timeout=10)
+        # Intento con verificación normal
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+        except requests.exceptions.SSLError:
+            # Si falla el SSL, probar sin verificación (solo lectura pública)
+            r = requests.get(url, headers=headers, timeout=10, verify=False)
+
         r.raise_for_status()
 
         if "bloqueada" in r.text.lower():
