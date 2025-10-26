@@ -5,7 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import os
 
 app = FastAPI(title="API CMP Perú", version="1.0")
 
@@ -13,15 +13,16 @@ def obtener_datos_cmp(cmp_number: str):
     url = f"https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php?cmp={cmp_number}"
 
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")  # modo sin interfaz
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
+    # 👉 Usa el Chrome y driver del contenedor, no webdriver_manager
+    options.binary_location = "/usr/bin/chromium"
+    service = Service("/usr/bin/chromedriver")
+
+    driver = webdriver.Chrome(service=service, options=options)
 
     wait = WebDriverWait(driver, 15)
     datos = {}
@@ -55,6 +56,7 @@ def obtener_datos_cmp(cmp_number: str):
         driver.quit()
 
     return datos
+
 
 @app.get("/consulta")
 def consulta_cmp(cmp: str = Query(..., description="Número CMP del médico")):
