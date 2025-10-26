@@ -6,30 +6,25 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-app = FastAPI(title="API CMP Perú", version="1.2")
+app = FastAPI(title="API CMP Perú", version="1.3")
 
 def obtener_datos_cmp(cmp_number: str):
-    url = f"https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php?cmp={cmp_number}"
+    base_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/"
+    data_url = "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/datos-colegiado.php"
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/141.0.0.0 Safari/537.36",
-        "Referer": "https://aplicaciones.cmp.org.pe/conoce_a_tu_medico/",
-        "Accept-Language": "es-PE,es;q=0.9,en;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0 Safari/537.36",
+        "Referer": base_url,
     }
 
     try:
-        # Intento con verificación normal
-        try:
-            r = requests.get(url, headers=headers, timeout=10)
-        except requests.exceptions.SSLError:
-            # Si falla el SSL, probar sin verificación (solo lectura pública)
-            r = requests.get(url, headers=headers, timeout=10, verify=False)
+        # Crear sesión para mantener cookies
+        session = requests.Session()
+        session.get(base_url, headers=headers, timeout=10, verify=False)
 
+        # Simular el formulario (método POST)
+        r = session.post(data_url, headers=headers, data={"cmp": cmp_number}, timeout=10, verify=False)
         r.raise_for_status()
-
-        if "bloqueada" in r.text.lower():
-            return {"error": "El sitio bloqueó la solicitud."}
 
         soup = BeautifulSoup(r.text, "html.parser")
         rows = soup.select("table tr")
@@ -49,10 +44,8 @@ def obtener_datos_cmp(cmp_number: str):
 
         return {"error": "No se encontraron resultados para ese CMP."}
 
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Error de conexión: {str(e)}"}
     except Exception as e:
-        return {"error": f"Error al procesar los datos: {str(e)}"}
+        return {"error": f"Error: {str(e)}"}
 
 @app.get("/consulta")
 def consulta_cmp(cmp: str = Query(..., description="Número CMP del médico")):
