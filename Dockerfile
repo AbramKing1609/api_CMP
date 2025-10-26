@@ -1,36 +1,26 @@
-# Imagen base de Python
+# Imagen base liviana
 FROM python:3.11-slim
 
-# No pedir confirmaciones
+# Evita prompts interactivos
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependencias del sistema (para Chrome + Selenium)
+# Instalar dependencias básicas
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium-driver \
-    chromium \
-    wget \
-    curl \
-    unzip \
-    xvfb \
     ca-certificates \
-    libgtk-3-0 \
-    libdbus-glib-1-2 \
-    libxt6 \
-    libxcomposite1 \
-    libxrandr2 \
-    libasound2 \
-    libpangocairo-1.0-0 && \
-    rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos del proyecto
+# Crear directorio de trabajo
 WORKDIR /app
+
+# Copiar archivos de proyecto
 COPY . .
 
-# Instalar dependencias Python
+# Instalar dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Exponer puerto
 EXPOSE 8000
 
-# Iniciar FastAPI con Uvicorn
+# Comando de inicio
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
